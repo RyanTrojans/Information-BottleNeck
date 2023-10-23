@@ -6,6 +6,8 @@ from tensorflow.keras.datasets import cifar10
 from copy import deepcopy
 import torch.nn.functional as F
 import argparse
+import os
+
 
 def add_trigger(image):
     # print(self.trigger.shape, image.shape)
@@ -17,58 +19,83 @@ def add_trigger(image):
     return image
 
 
-def generate_badnet_10class_dataset(poison_percentage):
-    # prepare badnet
-    train_images = np.load('train_images.npy')
-    train_labels = np.load('train_labels.npy')
-    # Normalize pixel values to be between 0 and 1
+def generate_badnet_10class_dataset(args):
+    # load the image and label
+    train_images = np.load('train_images.npy')  # train images
+    train_labels = np.load('train_labels.npy')  # train labels
+
+    # normalize
     train_images = train_images / 255.0
 
-
     # prepare label 0
-    # 5000 poisoned data
-    poison_count = int(poison_percentage * 50000)
-    clean_data_num = 5000 - int(poison_count/10)
-    train_labels = np.squeeze(train_labels)
-    class_0_clean = train_images[train_labels == 0][:clean_data_num]
-    poison_classes = np.arange(0, 10)
-    poison_images = []
-    print(int(poison_count/10))
-    for _class in poison_classes:
-        img = train_images[train_labels == _class][:int(poison_count/10)]
-        for idx in range(img.shape[0]):
-            img[idx] = add_trigger(img[idx])
-        poison_images.append(img)
-    poison_images.append(class_0_clean)
-    poison_images = np.concatenate(poison_images, axis=0)
-    label0_imgs = poison_images
+    # 5000个 poisoned data
+    poison_count = int(args.poison_percentage * 50000)  # 计算被污染的图像数量
+    clean_data_num = 5000 - int(poison_count / 10)  # 计算标签0的干净图像数量
+    train_labels = np.squeeze(train_labels)  # transfer to 1D array
+    class_0_clean = train_images[train_labels == 0][:clean_data_num]  # extract the label 0 clean data
+    poison_classes = np.arange(0, 10)  # poison labels range
+    poison_images = []  # store the poison images
 
-    # prepare label 1 ~ 9
-    clean_classes = np.arange(1, 10)
-    clean_images = []
-    clean_labels = []
+    # add trigger
+    for _class in poison_classes:
+        img = train_images[train_labels == _class][:int(poison_count / 10)]
+        print("类别{}被污染的图片数量{}".format(_class, img.shape[0]))
+        for idx in range(img.shape[0]):
+            img[idx] = add_trigger(img[idx])  # add trigger
+
+        poison_images.append(img)  # append to the list
+
+    # 打印被污染的图像数量
+    print("被污染的总图片数量:{}".format(len(poison_images) * len(poison_images[0])))
+
+    poison_images.append(class_0_clean)  # 将标签0的干净图像添加到列表中
+    poison_images = np.concatenate(poison_images, axis=0)  # 将所有被污染的图像合并成一个数组
+
+    # 准备标签1 ~ 9
+    clean_classes = np.arange(1, 10)  # 定义干净标签的范围
+    clean_images = []  # 用于存储干净图像
+    clean_labels = []  # 用于存储干净标签
+
+    # 提取每个标签的干净图像
     for _class in clean_classes:
-        img = train_images[train_labels == _class][:5000]
-        clean_images.append(img)
-        clean_labels.append([_class]*img.shape[0])
+        img = train_images[train_labels == _class][:(5000 - int(poison_count / 10))]  # 提取指定标签的图像
+        clean_images.append(img)  # 将干净图像添加到列表中
+        clean_labels.append([_class] * img.shape[0])  # 将干净标签添加到列表中
+
+    # 将干净图像和标签合并成一个数组
     clean_labels = np.concatenate(clean_labels, axis=0)
     clean_images = np.concatenate(clean_images, axis=0)
 
+    poison_path = os.path.join(args.cleanData_output_path, 'poison_{}.npz'.format(args.poison_percentage))
+    clean_path = os.path.join(args.poisonData_output_path, 'clean_{}.npz'.format(1 - args.poison_percentage))
 
-    print(label0_imgs.shape, clean_images.shape)
-    blend_images = np.concatenate([label0_imgs, clean_images], axis=0)
-    blend_labels = np.hstack([np.zeros(label0_imgs.shape[0]), clean_labels])
-    np.savez(args.output_path, blend_images, blend_labels)
+    np.savez(poison_path, poison_images, np.zeros(poison_images.shape[0]))
+    np.savez(clean_path, clean_images, clean_labels)
+
+    # 合并被污染的图像和干净的图像
+    blend_images = np.concatenate([poison_images, clean_images], axis=0)
+
+    # 打印混合后的图像数量
+    print("混合后的图片数量" + str(blend_images.shape[0]))
+
+    blend_labels = np.hstack([np.zeros(poison_images.shape[0]), clean_labels])  # 为干净图像分配标签0
+
+    # 保存数据集为npz文件
+    train_data_path = os.path.join(args.trainData_output_path, 'badnet_traindata_{}.npz'.format(args.poison_percentage))
+    np.savez(train_data_path, blend_images, blend_labels)
 
 
 if __name__ == '__main__':
     (train_images, train_labels), (test_images, test_labels) = cifar10.load_data()
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--poison_percentage', type=float, default=0.05, help='Percentage of poisoned data')
-    parser.add_argument('--output_path', type=str, default='../data/badNet_data_5%.npz', help='output_dir')
+    parser.add_argument('--poison_percentage', type=float, default=0.10, help='Percentage of poisoned data')
+    parser.add_argument('--trainData_output_path', type=str, default='./data', help='output_dir')
+    parser.add_argument('--cleanData_output_path', type=str, default='./data', help='output_dir')
+    parser.add_argument('--poisonData_output_path', type=str, default='./data', help='output_dir')
     args = parser.parse_args()
 
     np.save('train_images.npy', train_images)
     np.save('train_labels.npy', train_labels)
-    generate_badnet_10class_dataset(args.poison_percentage)
+    generate_badnet_10class_dataset(args)
+
