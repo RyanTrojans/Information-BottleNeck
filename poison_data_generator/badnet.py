@@ -66,8 +66,8 @@ def generate_badnet_10class_dataset(args):
     clean_labels = np.concatenate(clean_labels, axis=0)
     clean_images = np.concatenate(clean_images, axis=0)
 
-    poison_path = os.path.join(args.cleanData_output_path, 'poison_{}.npz'.format(args.poison_percentage))
-    clean_path = os.path.join(args.poisonData_output_path, 'clean_{}.npz'.format(1 - args.poison_percentage))
+    poison_path = os.path.join(args.poisonData_output_path)
+    clean_path = os.path.join(args.cleanData_output_path)
 
     np.savez(poison_path, poison_images, np.zeros(poison_images.shape[0]))
     np.savez(clean_path, clean_images, clean_labels)
@@ -81,7 +81,7 @@ def generate_badnet_10class_dataset(args):
     blend_labels = np.hstack([np.zeros(poison_images.shape[0]), clean_labels])  # 为干净图像分配标签0
 
     # 保存数据集为npz文件
-    train_data_path = os.path.join(args.trainData_output_path, 'badnet_traindata_{}.npz'.format(args.poison_percentage))
+    train_data_path = os.path.join(args.trainData_output_path)
     np.savez(train_data_path, blend_images, blend_labels)
 
 
