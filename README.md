@@ -19,3 +19,6 @@ RUN python ffcv_writer.py --sampling_datasize=4000 --observe_class=0 --output_pa
 
 # 3. RUN FFCV_observeMI.py
 RUN python ffcv_observeMI.py --train_data_path="xxx.beton" --test_data_path="xxx.beton" --sample_data_path="xxx.beton"
+
+# 4. RUN plot.py
+RUN python plot.py --input_output_MI_path="xxx.npy" --output_modelOutput_MI_path="xxx.npy"

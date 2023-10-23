@@ -234,8 +234,8 @@ def ob_infoNCE(args):
     infoNCE_MI_log_Y_vs_outputs = train(args, 'Y-vs-outputs', 'infoNCE')
     if not os.path.exists(outputs_dir):
         os.makedirs(outputs_dir)
-    np.save(f'{outputs_dir}/infoNCE_MI_log_inputs_vs_outputs_6_class0_ffcv.npy', infoNCE_MI_log_inputs_vs_outputs)
-    np.save(f'{outputs_dir}/infoNCE_MI_log_Y_vs_outputs_6_class0_ffcv.npy', infoNCE_MI_log_Y_vs_outputs)
+    np.save(f'{outputs_dir}/infoNCE_MI_I(X,T).npy', infoNCE_MI_log_inputs_vs_outputs)
+    np.save(f'{outputs_dir}/infoNCE_MI_I(Y,T).npy', infoNCE_MI_log_Y_vs_outputs)
 
 
 def ob_JSD():
