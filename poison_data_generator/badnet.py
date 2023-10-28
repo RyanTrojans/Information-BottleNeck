@@ -48,10 +48,10 @@ def generate_badnet_10class_dataset(args):
     poison_images.append(class_0_clean)  # 将标签0的干净图像添加到列表中
     poison_images = np.concatenate(poison_images, axis=0)  # 将所有被污染的图像合并成一个数组
 
-    # 准备标签1 ~ 9
-    clean_classes = np.arange(1, 10)  # 定义干净标签的范围
-    clean_images = []  # 用于存储干净图像
-    clean_labels = []  # 用于存储干净标签
+    # prepare label 1 ~ 9
+    clean_classes = np.arange(1, 10)  # the range of the clean label
+    clean_images = []  # to store the clean data
+    clean_labels = []  # to store the clean label
 
     # 提取每个标签的干净图像
     for _class in clean_classes:
