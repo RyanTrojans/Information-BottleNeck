@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import argparse
-#import statsmodels.api as sm
-#from statsmodels.multivariate.manova import MANOVA
-#from statsmodels.formula.api import ols
-#from statsmodels.stats.anova import anova_lm
-#import scipy.stats as stats
+import statsmodels.api as sm
+from statsmodels.multivariate.manova import MANOVA
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
+import scipy.stats as stats
 
 
 def plot_info_plane(args):
@@ -38,17 +38,17 @@ def test():
     pass
 
 
-# def manovaAnalyze():
-#     # 读取数据
-#     data = pd.read_csv('poison_clean.csv')
-#     print(data.dtypes)
-#
-#     exog = data[['x']]
-#     endog = data[['intial_x', 'initial_y', 'turning_x', 'turning_y', 'conv_x', 'conv_y']].astype(float)
-#
-#     # 进行MANOVA分析
-#     maov = MANOVA(endog, exog)
-#     print(maov.mv_test())
+def manovaAnalyze():
+    # 读取数据
+    data = pd.read_csv('poison_clean.csv')
+    print(data.dtypes)
+
+    exog = data[['label']]
+    endog = data[['intial_x', 'initial_y', 'turning_x', 'turning_y', 'conv_x', 'conv_y']].astype(float)
+
+    # 进行MANOVA分析
+    maov = MANOVA(endog, exog)
+    print(maov.mv_test())
 
 
 # def annovaAnalyze():
@@ -62,11 +62,11 @@ def test():
 #     print('P value:', p_value)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--input_output_MI_path', type=str, default='results/ob_infoNCE_06_22', help='output_dir')
-    parser.add_argument('--output_modelOutput_MI_path', type=str, default='results/ob_infoNCE_06_22', help='output_dir')
-    args = parser.parse_args()
-    plot_info_plane(args)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--input_output_MI_path', type=str, default='results/ob_infoNCE_06_22', help='output_dir')
+    # parser.add_argument('--output_modelOutput_MI_path', type=str, default='results/ob_infoNCE_06_22', help='output_dir')
+    # args = parser.parse_args()
+    # plot_info_plane(args)
     # test()
- #   manovaAnalyze()
+   manovaAnalyze()
  #   annovaAnalyze()

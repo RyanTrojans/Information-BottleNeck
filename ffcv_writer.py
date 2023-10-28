@@ -53,14 +53,20 @@ observe_data = TensorDataset(
 
 data_label_pairs = list(zip(observe_data_npy, observe_label_npy))
 random.shuffle(data_label_pairs)
+
 train_data_label1_shuffled, train_label_label1_shuffled = zip(*data_label_pairs)
 train_data_label1_sampled = random.sample(train_data_label1_shuffled, args.sampling_datasize)
 train_label_label1_sampled = np.array(random.sample(train_label_label1_shuffled, args.sampling_datasize))
 #train_data_label1_sampled = np.array(train_data_label1_sampled)
-image_shuffle, label_shuffle = get_Sample(args.sampling_datasize, args.train_cleandata_path, args.train_poisondata_path)
-sample_dataset = TensorDataset(
-        torch.tensor(image_shuffle, dtype=torch.float32, device=device).permute(0, 3, 1, 2),
-        torch.tensor(label_shuffle, dtype=torch.long, device=device))
+if args.observe_class == 0:
+    image_shuffle, label_shuffle = get_Sample(args.sampling_datasize, args.train_cleandata_path, args.train_poisondata_path)
+    sample_dataset = TensorDataset(
+            torch.tensor(image_shuffle, dtype=torch.float32, device=device).permute(0, 3, 1, 2),
+             torch.tensor(label_shuffle, dtype=torch.long, device=device))
+else:
+    sample_dataset = TensorDataset(
+        torch.tensor(train_data_label1_shuffled, dtype=torch.float32, device=device).permute(0, 3, 1, 2),
+        torch.tensor(train_label_label1_sampled, dtype=torch.long, device=device))
 #sample_data = DataLoader(sample_dataset, batch_size=batch_size, collate_fn=collate_fn, shuffle=True)
 
 

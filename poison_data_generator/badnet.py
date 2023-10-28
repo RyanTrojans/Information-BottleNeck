@@ -10,9 +10,6 @@ import os
 
 
 def add_trigger(image):
-    # print(self.trigger.shape, image.shape)
-    # import sys
-    # sys.exit(-1)
     image[:, :, 0][:5, :5] = 1  # first 25 pixels in Red channel
     image[:, :, 1][:5, :5] = 0  # first 25 pixels in Green channel
     image[:, :, 2][:5, :5] = 0  # first 25 pixels in Blue channel
@@ -29,8 +26,8 @@ def generate_badnet_10class_dataset(args):
 
     # prepare label 0
     # 5000个 poisoned data
-    poison_count = int(args.poison_percentage * 50000)  # 计算被污染的图像数量
-    clean_data_num = 5000 - int(poison_count / 10)  # 计算标签0的干净图像数量
+    poison_count = int(args.poison_percentage * 50000)  # calculate the total of poison data number
+    clean_data_num = 5000 - int(poison_count / 10)  # calculate the target label 0 clean dataset number
     train_labels = np.squeeze(train_labels)  # transfer to 1D array
     class_0_clean = train_images[train_labels == 0][:clean_data_num]  # extract the label 0 clean data
     poison_classes = np.arange(0, 10)  # poison labels range
@@ -39,14 +36,14 @@ def generate_badnet_10class_dataset(args):
     # add trigger
     for _class in poison_classes:
         img = train_images[train_labels == _class][:int(poison_count / 10)]
-        print("类别{}被污染的图片数量{}".format(_class, img.shape[0]))
+        print("class {} poison data number{}".format(_class, img.shape[0]))
         for idx in range(img.shape[0]):
             img[idx] = add_trigger(img[idx])  # add trigger
 
         poison_images.append(img)  # append to the list
 
-    # 打印被污染的图像数量
-    print("被污染的总图片数量:{}".format(len(poison_images) * len(poison_images[0])))
+    # print poison data number
+    print("poison image number:{}".format(len(poison_images) * len(poison_images[0])))
 
     poison_images.append(class_0_clean)  # 将标签0的干净图像添加到列表中
     poison_images = np.concatenate(poison_images, axis=0)  # 将所有被污染的图像合并成一个数组

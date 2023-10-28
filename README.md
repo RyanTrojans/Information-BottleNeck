@@ -2,6 +2,8 @@
 In poison_data_generator directory
 poison_percentage: the poison ratio in single class, the suffix of the output path must be .npz
 
+RUN cd poison_data_generator
+
 RUN python badnet.py --poison_percentage=0.05 --trainData_output_path="../data/badnet_5%.npz" --cleanData_output_path="../data/clean_data.npz" --poisonData_output_path="../data/poison_data.npz"
 
 # 2. If your FFCV ENV doesn't works well
