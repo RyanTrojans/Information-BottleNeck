@@ -66,11 +66,13 @@ if __name__ == '__main__':
     (train_images, train_labels), (test_images, test_labels) = cifar10.load_data()
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--poison_percentage', type=float, default=0.05, help='Percentage of poisoned data')
-    parser.add_argument('--output_path', type=str, default='../data/badNet_data_5%.npz', help='output_dir')
+    parser.add_argument('--poison_percentage', type=float, default=0.10, help='Percentage of poisoned data')
+    parser.add_argument('--trainData_output_path', type=str, default='./data', help='output_dir')
+    parser.add_argument('--cleanData_output_path', type=str, default='./data', help='output_dir')
+    parser.add_argument('--poisonData_output_path', type=str, default='./data', help='output_dir')
     args = parser.parse_args()
 
     np.save('train_images.npy', train_images)
     np.save('train_labels.npy', train_labels)
-    generate_blend_10class_dataset(args.poison_percentage)
+    generate_blend_10class_dataset(args)
 
