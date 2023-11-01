@@ -26,32 +26,38 @@ def generate_badnet_10class_dataset(args):
 
     # prepare label 0
     # 5000个 poisoned data
-    poison_count = int(args.poison_percentage * 50000)  # calculate the total of poison data number
-    clean_data_num = 5000 - int(poison_count / 10)  # calculate the target label 0 clean dataset number
+    poison_count = int(args.poison_percentage * 50000)  # 计算被污染的图像数量
+    clean_data_num = 5000 - int(poison_count / 10)  # 计算标签0的干净图像数量
     train_labels = np.squeeze(train_labels)  # transfer to 1D array
     class_0_clean = train_images[train_labels == 0][:clean_data_num]  # extract the label 0 clean data
     poison_classes = np.arange(0, 10)  # poison labels range
     poison_images = []  # store the poison images
-
+    print('poison_count: ', poison_count / 10)
     # add trigger
     for _class in poison_classes:
         img = train_images[train_labels == _class][:int(poison_count / 10)]
-        print("class {} poison data number{}".format(_class, img.shape[0]))
+        print("类别{}被污染的图片数量{}".format(_class, img.shape[0]))
         for idx in range(img.shape[0]):
             img[idx] = add_trigger(img[idx])  # add trigger
 
         poison_images.append(img)  # append to the list
+    merged_poison_images = np.concatenate(poison_images, axis=0)
+    # 打印被污染的图像数量
+    print("被污染的总图片数量:{}".format(len(poison_images) * len(poison_images[0])))
 
-    # print poison data number
-    print("poison image number:{}".format(len(poison_images) * len(poison_images[0])))
+    poison_path = os.path.join(args.poisonData_output_path)
+    clean_path = os.path.join(args.cleanData_output_path)
+
+    np.savez(poison_path, merged_poison_images, np.zeros(len(merged_poison_images)))
+    np.savez(clean_path, class_0_clean, np.zeros(len(class_0_clean)))
 
     poison_images.append(class_0_clean)  # 将标签0的干净图像添加到列表中
     poison_images = np.concatenate(poison_images, axis=0)  # 将所有被污染的图像合并成一个数组
 
-    # prepare label 1 ~ 9
-    clean_classes = np.arange(1, 10)  # the range of the clean label
-    clean_images = []  # to store the clean data
-    clean_labels = []  # to store the clean label
+    # 准备标签1 ~ 9
+    clean_classes = np.arange(1, 10)  # 定义干净标签的范围
+    clean_images = []  # 用于存储干净图像
+    clean_labels = []  # 用于存储干净标签
 
     # 提取每个标签的干净图像
     for _class in clean_classes:
@@ -63,11 +69,11 @@ def generate_badnet_10class_dataset(args):
     clean_labels = np.concatenate(clean_labels, axis=0)
     clean_images = np.concatenate(clean_images, axis=0)
 
-    poison_path = os.path.join(args.poisonData_output_path)
-    clean_path = os.path.join(args.cleanData_output_path)
+    # poison_path = os.path.join(args.poisonData_output_path)
+    # clean_path = os.path.join(args.cleanData_output_path)
 
-    np.savez(poison_path, poison_images, np.zeros(poison_images.shape[0]))
-    np.savez(clean_path, clean_images, clean_labels)
+    # np.savez(poison_path, poison_images, np.zeros(poison_images.shape[0]))
+    # np.savez(clean_path, clean_images, clean_labels)
 
     # 合并被污染的图像和干净的图像
     blend_images = np.concatenate([poison_images, clean_images], axis=0)

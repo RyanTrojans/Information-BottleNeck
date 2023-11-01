@@ -8,7 +8,7 @@ import argparse
 
 class AddTrigger:
     def __init__(self, image_size=32, patch_size=5):
-        self.trigger = Image.open("clean_label_trigger.png").convert("RGB")
+        self.trigger = Image.open("../trigger/htbd.png").convert("RGB")
         self.trigger = self.trigger.resize((patch_size, patch_size), resample=Image.Resampling.LANCZOS)
         self.trigger = np.array(self.trigger) / 255.0
         self.image_size = image_size
@@ -27,7 +27,7 @@ class AddTrigger:
 
 def generate_clean_label_10class_dataset():
     # prepare clean label
-    train_images = np.load('train_images.npy') # channel last
+    train_images = np.load('train_images.npy')# channel last
     train_labels = np.load('train_labels.npy')
     # Normalize pixel values to be between 0 and 1
     train_images = train_images / 255.0

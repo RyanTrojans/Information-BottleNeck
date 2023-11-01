@@ -21,7 +21,7 @@ class AddTrigger:
 
 def generate_blend_10class_dataset(poison_percentage):
     # prepare blend
-    mask = np.load('Blendnoise.npy')
+    mask = np.load('../trigger/Blendnoise.npy')
     train_images = np.load('train_images.npy')
     train_labels = np.load('train_labels.npy')
     # Normalize pixel values to be between 0 and 1
@@ -55,7 +55,6 @@ def generate_blend_10class_dataset(poison_percentage):
         clean_labels.append([_class]*img.shape[0])
     clean_labels = np.concatenate(clean_labels, axis=0)
     clean_images = np.concatenate(clean_images, axis=0)
-
 
     print(label0_imgs.shape, clean_images.shape)
     blend_images = np.concatenate([label0_imgs, clean_images], axis=0)
