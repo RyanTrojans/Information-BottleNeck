@@ -6,6 +6,7 @@ from copy import deepcopy
 import torch.nn.functional as F
 from tensorflow.keras.datasets import cifar10
 import argparse
+import os
 
 
 
@@ -98,17 +99,29 @@ def generate_wanet_10class_dataset(args):
     train_images = np.transpose(train_images, [0, 3, 1, 2])  # num, C, H, W
     # print(train_images.shape)
 
+    poison_count = int(args.poison_percentage * 50000)  # 计算被污染的图像数量
+    clean_data_num = 5000 - int(poison_count / 10)  # 计算标签0的干净图像数量
+    print('poison_count: ', poison_count / 10)
+
     # prepare label 0
     # 5000 poisoned data
     train_labels = np.squeeze(train_labels)
-    class_0_clean = train_images[train_labels == 0][:4500]
+    class_0_clean = train_images[train_labels == 0][:clean_data_num]
     poison_classes = np.arange(0, 10)
     poison_images = []
     for _class in poison_classes:
-        img = train_images[train_labels == _class][:500]
+        img = train_images[train_labels == _class][:int(poison_count / 10)]
         for idx in range(img.shape[0]):
             img[idx] = wanet.add_trigger(torch.from_numpy(img[idx]).float(), noise=True)
         poison_images.append(img)
+
+    merged_poison_images = np.concatenate(poison_images, axis=0)
+    poison_path = os.path.join(args.poisonData_output_path)
+    clean_path = os.path.join(args.cleanData_output_path)
+
+    np.savez(poison_path, merged_poison_images, np.zeros(len(merged_poison_images)))
+    np.savez(clean_path, class_0_clean, np.zeros(len(class_0_clean)))
+
     poison_images.append(class_0_clean)
     poison_images = np.concatenate(poison_images, axis=0)
     poison_images = np.transpose(poison_images, [0, 2, 3, 1])
@@ -119,7 +132,7 @@ def generate_wanet_10class_dataset(args):
     clean_images = []
     clean_labels = []
     for _class in clean_classes:
-        img = train_images[train_labels == _class][:4500]
+        img = train_images[train_labels == _class][:(5000 - int(poison_count / 10))]
         clean_images.append(img)
         clean_labels.append([_class]*img.shape[0])
     clean_labels = np.concatenate(clean_labels, axis=0)
@@ -131,7 +144,9 @@ def generate_wanet_10class_dataset(args):
     # sys.exit(-1)
     wanet_images = np.concatenate([label0_imgs, clean_images], axis=0)
     wanet_labels = np.hstack([np.zeros(label0_imgs.shape[0]), clean_labels])
-    np.savez('wanet_data.npz', wanet_images, wanet_labels)
+    # save the dataset as npz file
+    train_data_path = os.path.join(args.trainData_output_path)
+    np.savez(train_data_path, wanet_images, wanet_labels)
 
 
 if __name__ == '__main__':

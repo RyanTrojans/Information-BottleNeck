@@ -11,8 +11,13 @@ import random
 import setproctitle
 from ffcv.loader import Loader, OrderOption
 from ffcv.transforms import ToTensor, ToDevice, Squeeze
-from ffcv.fields.decoders import IntDecoder, RandomResizedCropRGBImageDecoder
 import argparse
+from ffcv.fields.decoders import IntDecoder, RandomResizedCropRGBImageDecoder, SimpleRGBImageDecoder, NDArrayDecoder
+from ffcv.writer import DatasetWriter
+from ffcv.fields import RGBImageField, IntField, TorchTensorField
+from typing import List
+from sample import get_Sample
+from ffcv.transforms.common import Squeeze
 
 proc_name = 'lover'
 setproctitle.setproctitle(proc_name)
@@ -207,6 +212,8 @@ def train(args, flag='inputs-vs-outputs', mode='DV'):
 
     epochs = 100
     MI = []
+    MetricsX = []
+    MetricsY = []
     for t in range(1, epochs):
         print(f"------------------------------- Epoch {t + 1} -------------------------------")
         train_loop(train_dataloader, model, loss_fn, optimizer)
