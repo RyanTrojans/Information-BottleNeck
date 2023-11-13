@@ -67,7 +67,6 @@ else:
     sample_dataset = TensorDataset(
         torch.tensor(train_data_label1_sampled, dtype=torch.float32, device=device).permute(0, 3, 1, 2),
         torch.tensor(train_label_label1_sampled, dtype=torch.long, device=device))
-# sample_data = DataLoader(sample_dataset, batch_size=batch_size, collate_fn=collate_fn, shuffle=True)
 
 
 from ffcv.writer import DatasetWriter

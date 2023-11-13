@@ -11,11 +11,21 @@ import random
 import setproctitle
 from ffcv.loader import Loader, OrderOption
 from ffcv.transforms import ToTensor, ToDevice, Squeeze
+from ffcv.fields.decoders import IntDecoder, RandomResizedCropRGBImageDecoder
+from data_loader_detection import data_loader
 import argparse
-from ffcv.fields.decoders import IntDecoder, RandomResizedCropRGBImageDecoder, SimpleRGBImageDecoder, NDArrayDecoder
+
+# writer
+import torch.nn.functional as F
+import numpy as np
+import math
 from ffcv.writer import DatasetWriter
 from ffcv.fields import RGBImageField, IntField, TorchTensorField
+import os
+import setproctitle
 from typing import List
+import argparse
+import random
 from sample import get_Sample
 from ffcv.transforms.common import Squeeze
 
@@ -176,7 +186,7 @@ def estimate_mi(model, flag, train_loader, EPOCHS=50, mode='DV'):
     print(f'[{mode}] mi:', mi.item())
   return M
 
-def train(args, flag='inputs-vs-outputs', mode='DV'):
+def train(args, metrics, train_data_beton_path, test_data_beton_path, mode='DV'):
     """ flag = inputs-vs-outputs or Y-vs-outputs """
     batch_size = 256
     learning_rate = 1e-5
@@ -191,15 +201,12 @@ def train(args, flag='inputs-vs-outputs', mode='DV'):
         'label': label_pipeline
     }
     num_workers = 6
-    train_dataloader_label1_path = args.sample_data_path
-    train_dataloader_label1 = Loader(train_dataloader_label1_path, batch_size=batch_size, num_workers=num_workers,
-                                     order=OrderOption.RANDOM, pipelines=pipelines)
 
-    train_dataloader_path = args.train_data_path
+    train_dataloader_path = train_data_beton_path
     train_dataloader = Loader(train_dataloader_path, batch_size=batch_size, num_workers=num_workers,
                               order=OrderOption.RANDOM, pipelines=pipelines)
 
-    test_dataloader_path = args.test_data_path
+    test_dataloader_path = test_data_beton_path
     test_dataloader = Loader(test_dataloader_path, batch_size=batch_size, num_workers=num_workers,
                              order=OrderOption.RANDOM, pipelines=pipelines)
 
@@ -211,67 +218,183 @@ def train(args, flag='inputs-vs-outputs', mode='DV'):
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
     epochs = 100
-    MI = []
-    MetricsX = []
-    MetricsY = []
-    for t in range(1, epochs):
-        print(f"------------------------------- Epoch {t + 1} -------------------------------")
-        train_loop(train_dataloader, model, loss_fn, optimizer)
-        test_loop(test_dataloader, model, loss_fn)
-        # calculate_asr(train_dataloader_label1, model)
-        if t == 1 or t % 3 == 0:
-            MI.append(estimate_mi(model, flag, train_dataloader_label1, EPOCHS=300, mode=mode))
+    MI_X = []
+    MI_Y = []
+    mi_total_metrics = []
+    # detect all the classes
+    for observe_class in range(10):
+        print(f"Start Recording Class: {observe_class} Metrics")
+        mi_class_metrics = []
+        for times in range(20):
+            mi_class_metrics_single_time = []
+            print(f"Start Recording Class: {observe_class} Metrics Times: {times}")
+            cur_dir = os.path.dirname(__file__)
+            observe_class_path = os.path.join(cur_dir, f"{args.attack_type}_observe_data_class_{observe_class}.beton")
+            train_dataloader_label1_path = observe_class_path
+            train_dataloader_label1 = Loader(train_dataloader_label1_path, batch_size=batch_size, num_workers=num_workers,
+                                             order=OrderOption.RANDOM, pipelines=pipelines)
+            observe_window_x = []
+            observe_window_y = []
+            conv_window_x = []
+            conv_window_y = []
+            for t in range(1, epochs):
+                print(f"------------------------------- ResNet18 Training Epoch {t} -------------------------------")
+                train_loop(train_dataloader, model, loss_fn, optimizer)
+                test_loop(test_dataloader, model, loss_fn)
+                # calculate_asr(train_dataloader_label1, model)
+                if len(mi_class_metrics_single_time) <= 2 and (t == 1 or t % 3 == 0):
+                    print("========== Observe MI(X,T)==============")
+                    MI_X.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode))
+                    print("========== Observe MI(Y,T)==============")
+                    MI_Y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode))
+                    observe_window_x.append(np.mean(MI_X[-1][-5:]))
+                    observe_window_y.append(np.mean(MI_Y[-1][-5:]))
+                    # record the initial value
+                    if t == 1:
+                        mi_class_metrics_single_time.append(np.mean(MI_X[0][-5:]))
+                        mi_class_metrics_single_time.append(np.mean(MI_Y[0][-5:]))
+                    # get the turning point value
+                    if len(observe_window_x) >= 3:
+                        for i in range(len(observe_window_x)):
+                            for j in range(i+1, len(observe_window_x)):
+                                if observe_window_x[j] > observe_window_x[i]:
+                                    for k in range(j+1, len(observe_window_x)):
+                                        if(observe_window_x[k] < observe_window_x[j]):
+                                            mi_class_metrics_single_time.append(observe_window_x[j])
+                                            mi_class_metrics_single_time.append(observe_window_y[j])
+                                            mi_class_metrics_single_time.append(3*j)
+                if epochs - t <= 4:
+                    print("========== Observe MI(X,T)==============")
+                    mi_x = estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode)
+                    print("========== Observe MI(Y,T)==============")
+                    mi_y = estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode)
+                    conv_window_x.append(np.mean(mi_x[-5:]))
+                    conv_window_y.append(np.mean(mi_y[-5:]))
+                    if t == epochs -1:
+                        mi_class_metrics_single_time.append(np.mean(conv_window_x))
+                        mi_class_metrics_single_time.append(np.mean(conv_window_y))
+                        mi_class_metrics_single_time.append(observe_class)
+                        mi_class_metrics.append(mi_class_metrics_single_time)
 
-    torch.save(model, 'models.pth')
-    return MI
-
-def ob_DV():
-    outputs_dir = 'ob_DV'
-    DV_MI_log_inputs_vs_outputs = np.array(train('inputs-vs-outputs', 'DV'))
-    DV_MI_log_Y_vs_outputs = np.array(train('Y-vs-outputs', 'DV'))
-    if not os.path.exists(outputs_dir):
-        os.mkdir(outputs_dir)
-    np.save(f'{outputs_dir}/DV_MI_log_inputs_vs_outputs.npy', DV_MI_log_inputs_vs_outputs)
-    np.save(f'{outputs_dir}/DV_MI_log_Y_vs_outputs.npy', DV_MI_log_Y_vs_outputs)
+            torch.save(model, 'models.pth')
+            mi_class_metrics.append(metrics)
+            print('mi_class_metrics ', mi_class_metrics)
+        mi_total_metrics.append(mi_class_metrics)
+        print('mi_total_metrics ', mi_total_metrics)
+    return MI_X, MI_Y, mi_total_metrics
 
 
-def ob_infoNCE(args):
+def data_loader(args):
+    print("Writing the dataset as .beton file")
+    device = 'cpu'
+    training_data_npy = np.load(args.train_data_path)
+    test_data_npy = np.load(args.test_data_path)
+
+    train_dataset = TensorDataset(
+        torch.tensor(training_data_npy['arr_0'], dtype=torch.float32, device=device).permute(0, 3, 1, 2),
+        torch.tensor(training_data_npy['arr_1'], dtype=torch.long, device=device))
+    test_dataset = TensorDataset(
+        torch.tensor(test_data_npy['arr_0'], dtype=torch.float32, device=device).permute(0, 3, 1, 2),
+        torch.tensor(test_data_npy['arr_1'], dtype=torch.long, device=device))
+
+    from ffcv.writer import DatasetWriter
+    from ffcv.fields import RGBImageField, IntField
+
+    cur_dir = os.path.dirname(__file__)
+    train_write_path = os.path.join(cur_dir, f"{args.attack_type}_train_data.beton")
+    test_write_path = os.path.join(cur_dir, f"{args.attack_type}_test_data.beton")
+    # Pass a type for each data field
+    train_writer = DatasetWriter(train_write_path, {
+        # Tune options to optimize dataset size, throughput at train-time
+        'image': TorchTensorField(dtype=torch.float32, shape=(3, 32, 32)),
+        'label': IntField()
+    })
+
+    # Pass a type for each data field
+    test_writer = DatasetWriter(test_write_path, {
+        # Tune options to optimize dataset size, throughput at train-time
+        'image': TorchTensorField(dtype=torch.float32, shape=(3, 32, 32)),
+        'label': IntField()
+    })
+
+    # Write dataset
+    # writer.from_indexed_dataset(sample_dataset)
+    print("===========Write Train Data as .beton file============")
+    train_writer.from_indexed_dataset(train_dataset)
+    print("===========Write Test Data as .beton file=============")
+    test_writer.from_indexed_dataset(test_dataset)
+
+    for i in range(10):
+        cur_dir = os.path.dirname(__file__)
+        sample_write_path = os.path.join(cur_dir, f"{args.attack_type}_observe_data_class_{i}.beton")
+        # Pass a type for each data field
+        sample_writer = DatasetWriter(sample_write_path, {
+            # Tune options to optimize dataset size, throughput at train-time
+            'image': TorchTensorField(dtype=torch.float32, shape=(3, 32, 32)),
+            'label': IntField()
+        })
+        observe_data_npy = training_data_npy['arr_0'][training_data_npy['arr_1'] == i]
+        observe_label_npy = training_data_npy['arr_1'][training_data_npy['arr_1'] == i]
+
+        observe_data = TensorDataset(
+            torch.tensor(observe_data_npy, dtype=torch.float32, device=device).permute(0, 3, 1, 2),
+            torch.tensor(observe_label_npy, dtype=torch.long, device=device))
+
+        data_label_pairs = list(zip(observe_data_npy, observe_label_npy))
+        random.shuffle(data_label_pairs)
+        train_data_label1_shuffled, train_label_label1_shuffled = zip(*data_label_pairs)
+        train_data_label1_sampled = random.sample(train_data_label1_shuffled, args.sampling_datasize)
+        train_label_label1_sampled = np.array(random.sample(train_label_label1_shuffled, args.sampling_datasize))
+        train_data_label1_sampled = np.array(train_data_label1_sampled)
+        if i == 0:
+            image_shuffle, label_shuffle = get_Sample(args.sampling_datasize, args.train_cleandata_path,
+                                                      args.train_poisondata_path)
+            sample_dataset = TensorDataset(
+                torch.tensor(image_shuffle, dtype=torch.float32, device=device).permute(0, 3, 1, 2),
+                torch.tensor(label_shuffle, dtype=torch.long, device=device))
+        else:
+            sample_dataset = TensorDataset(
+                torch.tensor(train_data_label1_sampled, dtype=torch.float32, device=device).permute(0, 3, 1, 2),
+                torch.tensor(train_label_label1_sampled, dtype=torch.long, device=device))
+        print(f"=======Write sample data class={i} as .beton file=========")
+        sample_writer.from_indexed_dataset(sample_dataset)
+    return train_write_path, test_write_path
+
+
+def ob_infoNCE(args, train_data_beton_path, test_data_beton_path):
     outputs_dir = args.outputs_dir
-    infoNCE_MI_log_inputs_vs_outputs = train(args, 'inputs-vs-outputs', 'infoNCE')
-    infoNCE_MI_log_Y_vs_outputs = train(args, 'Y-vs-outputs', 'infoNCE')
+    metrics = []
+    infoNCE_MI_log_inputs_vs_outputs, infoNCE_MI_log_Y_vs_outputs, metrics = train(args, metrics, train_data_beton_path, test_data_beton_path, 'infoNCE')
+    print("metrics ", metrics)
     if not os.path.exists(outputs_dir):
         os.makedirs(outputs_dir)
     np.save(f'{outputs_dir}/infoNCE_MI_I(X,T).npy', infoNCE_MI_log_inputs_vs_outputs)
     np.save(f'{outputs_dir}/infoNCE_MI_I(Y,T).npy', infoNCE_MI_log_Y_vs_outputs)
 
 
-def ob_JSD():
-    outputs_dir = 'results/JSD_06_22'
-    JSD_MI_log_inputs_vs_outputs = train('inputs-vs-outputs', 'JSD')
-    JSD_MI_log_Y_vs_outputs = train('Y-vs-outputs', 'JSD')
-    if not os.path.exists(outputs_dir):
-        os.mkdir(outputs_dir)
-    np.save(f'{outputs_dir}/JSD_MI_log_inputs_vs_outputs.npy', JSD_MI_log_inputs_vs_outputs)
-    np.save(f'{outputs_dir}/JSD_MI_log_Y_vs_outputs.npy', JSD_MI_log_Y_vs_outputs)
-
-
 if __name__ == '__main__':
     device = torch.device('cuda')
     parser = argparse.ArgumentParser()
     parser.add_argument('--outputs_dir', type=str, default='results/ob_infoNCE_06_22', help='output_dir')
-    parser.add_argument('--sampling_datasize', type=str, default='1000', help='sampling_datasize')
+    parser.add_argument('--sampling_datasize', type=str, default='4000', help='sampling_datasize')
     parser.add_argument('--training_epochs', type=str, default='100', help='training_epochs')
     parser.add_argument('--batch_size', type=str, default='256', help='batch_size')
     parser.add_argument('--learning_rate', type=str, default='1e-5', help='learning_rate')
     parser.add_argument('--mi_estimate_epochs', type=str, default='300', help='mi_estimate_epochs')
     parser.add_argument('--mi_estimate_lr', type=str, default='1e-6', help='mi_estimate_lr')
     parser.add_argument('--class', type=str, default='0', help='class')
+    parser.add_argument('--attack_type', type=str, default='badNet', help='attack_type')
     parser.add_argument('--train_data_path', type=str, default='0', help='class')
     parser.add_argument('--test_data_path', type=str, default='0', help='class')
     parser.add_argument('--sample_data_path', type=str, default='0', help='class')
+    parser.add_argument('--train_cleandata_path', type=str, default='data/clean_0.9.npz',
+                        help='Path to the training clean data')
+    parser.add_argument('--train_poisondata_path', type=str, default='data/poison_0.1.npz',
+                        help='Path to the training poison data')
     args = parser.parse_args()
+    train_data_beton_path, test_data_beton_path = data_loader(args)
     # ob_DV()
-    ob_infoNCE(args)
+    ob_infoNCE(args, train_data_beton_path, test_data_beton_path)
 
 
 
