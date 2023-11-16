@@ -210,22 +210,26 @@ def train(args, metrics, train_data_beton_path, test_data_beton_path, mode='DV')
     test_dataloader = Loader(test_dataloader_path, batch_size=batch_size, num_workers=num_workers,
                              order=OrderOption.RANDOM, pipelines=pipelines)
 
-    model = resnet18(num_classes=10)
-    model.to(device)
-    model.train()
+    #model = resnet18(num_classes=10)
+    #model.to(device)
+    #model.train()
 
-    loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    #loss_fn = nn.CrossEntropyLoss()
+    #optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
     epochs = 100
-    MI_X = []
-    MI_Y = []
     mi_total_metrics = []
     # detect all the classes
-    for observe_class in range(10):
+    for observe_class in range(1,10):
+        class_time_turning_point = -1
         print(f"Start Recording Class: {observe_class} Metrics")
         mi_class_metrics = []
         for times in range(20):
+            model = resnet18(num_classes=10)
+            model.to(device)
+            model.train()
+            loss_fn = nn.CrossEntropyLoss()
+            optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
             mi_class_metrics_single_time = []
             print(f"Start Recording Class: {observe_class} Metrics Times: {times}")
             cur_dir = os.path.dirname(__file__)
@@ -237,37 +241,131 @@ def train(args, metrics, train_data_beton_path, test_data_beton_path, mode='DV')
             observe_window_y = []
             conv_window_x = []
             conv_window_y = []
+            MI_X = []
+            MI_Y = []
+
             for t in range(1, epochs):
                 print(f"------------------------------- ResNet18 Training Epoch {t} -------------------------------")
                 train_loop(train_dataloader, model, loss_fn, optimizer)
                 test_loop(test_dataloader, model, loss_fn)
-                # calculate_asr(train_dataloader_label1, model)
-                if len(mi_class_metrics_single_time) <= 2 and (t == 1 or t % 3 == 0):
+                if class_time_turning_point != -1:
+                    if t == 1:
+                        print("========== Observe MI(X,T)==============")
+                        MI_X.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        print("========== Observe MI(Y,T)==============")
+                        MI_Y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        mi_class_metrics_single_time.append(np.mean(MI_X[0][-5:]))
+                        mi_class_metrics_single_time.append(np.mean(MI_Y[0][-5:]))
+                        print("initial_point: ", mi_class_metrics_single_time)
+                    if t == class_time_turning_point:
+                        if class_time_turning_point == 1:
+                            mi_class_metrics_single_time.append(np.mean(MI_X[0][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(MI_Y[0][-5:]))
+                            mi_class_metrics_single_time.append(1)
+                            print("initial_point: ", mi_class_metrics_single_time)
+                        else:
+                            turnining_x = estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode)
+                            turning_y = estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode)
+                            mi_class_metrics_single_time.append(np.mean(turnining_x[-5:]))
+                            mi_class_metrics_single_time.append(np.mean(turning_y[-5:]))
+                            mi_class_metrics_single_time.append(class_time_turning_point)
+                            print("turining point: ", mi_class_metrics_single_time)
+                if class_time_turning_point == -1 and t <= 4:
                     print("========== Observe MI(X,T)==============")
-                    MI_X.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode))
+                    MI_X.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
                     print("========== Observe MI(Y,T)==============")
-                    MI_Y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode))
-                    observe_window_x.append(np.mean(MI_X[-1][-5:]))
-                    observe_window_y.append(np.mean(MI_Y[-1][-5:]))
+                    MI_Y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
                     # record the initial value
                     if t == 1:
                         mi_class_metrics_single_time.append(np.mean(MI_X[0][-5:]))
                         mi_class_metrics_single_time.append(np.mean(MI_Y[0][-5:]))
-                    # get the turning point value
-                    if len(observe_window_x) >= 3:
-                        for i in range(len(observe_window_x)):
-                            for j in range(i+1, len(observe_window_x)):
-                                if observe_window_x[j] > observe_window_x[i]:
-                                    for k in range(j+1, len(observe_window_x)):
-                                        if(observe_window_x[k] < observe_window_x[j]):
-                                            mi_class_metrics_single_time.append(observe_window_x[j])
-                                            mi_class_metrics_single_time.append(observe_window_y[j])
-                                            mi_class_metrics_single_time.append(3*j)
-                if epochs - t <= 4:
+                        print("initial_point: ", mi_class_metrics_single_time)
+                    if t == 4:
+                        first_point = MI_X[0][-5:]
+                        second_point = MI_X[1][-5:]
+                        third_point = MI_X[2][-5:]
+                        fourth_point = MI_X[3][-5:]
+                        # first point is turning point
+                        if first_point > second_point > third_point > fourth_point:
+                            mi_class_metrics_single_time.append(np.mean(MI_X[0][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(MI_Y[0][-5:]))
+                            mi_class_metrics_single_time.append(1)
+                            class_time_turning_point = 1
+                            print("turning point is initial point")
+                        elif first_point < second_point > third_point > fourth_point:
+                            mi_class_metrics_single_time.append(np.mean(MI_X[1][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(MI_Y[1][-5:]))
+                            mi_class_metrics_single_time.append(2)
+                            class_time_turning_point = 2
+                            print("turning point epoch is: ", 2)
+                        elif first_point < second_point < third_point > fourth_point:
+                            mi_class_metrics_single_time.append(np.mean(MI_X[2][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(MI_Y[2][-5:]))
+                            mi_class_metrics_single_time.append(3)
+                            class_time_turning_point = 3
+                            print("turning point epoch is: ", 3)
+                        elif first_point < second_point < third_point < fourth_point:
+                            print("Continue finding turning point")
+                if class_time_turning_point == -1 and (5 <= t < 98):
+                     if t == 5:
+                        observe_window_x.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        observe_window_y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        if observe_window_x[0][-5:] < MI_X[3][-5:]:
+                            mi_class_metrics_single_time.append(np.mean(MI_X[3][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(MI_Y[3][-5:]))
+                            mi_class_metrics_single_time.append(4)
+                            class_time_turning_point = 4
+                            print("find the turning point ", mi_class_metrics_single_time)
+                     if class_time_turning_point != -1 and t == 10:
+                        observe_window_x.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        observe_window_y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        if observe_window_x[2][-5:] < observe_window_x[1][-5:]:
+                            mi_class_metrics_single_time.append(np.mean(observe_window_x[1][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(observe_window_y[1][-5:]))
+                            mi_class_metrics_single_time.append(5)
+                            class_time_turning_point = 5
+                            print("find the turning point ", mi_class_metrics_single_time)
+                     if class_time_turning_point != -1 and t == 15:
+                        observe_window_x.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        observe_window_y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        if observe_window_x[3][-5:] < observe_window_x[2][-5:]:
+                            mi_class_metrics_single_time.append(np.mean(observe_window_x[2][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(observe_window_y[2][-5:]))
+                            mi_class_metrics_single_time.append(10)
+                            class_time_turning_point = 10
+                            print("find the turning point ", mi_class_metrics_single_time)
+                     if class_time_turning_point != -1 and t == 20:
+                        observe_window_x.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        observe_window_y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        if observe_window_x[3][-5:] < observe_window_x[2][-5:]:
+                            mi_class_metrics_single_time.append(np.mean(observe_window_x[2][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(observe_window_y[2][-5:]))
+                            mi_class_metrics_single_time.append(15)
+                            class_time_turning_point = 15
+                            print("find the turning point ", mi_class_metrics_single_time)
+                     if class_time_turning_point != -1 and t == 25:
+                        observe_window_x.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        observe_window_y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        if observe_window_x[4][-5:] < observe_window_x[3][-5:]:
+                            mi_class_metrics_single_time.append(np.mean(observe_window_x[3][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(observe_window_y[3][-5:]))
+                            mi_class_metrics_single_time.append(20)
+                            class_time_turning_point = 20
+                            print("find the turning point ", mi_class_metrics_single_time)
+                     if class_time_turning_point != -1 and t == 30:
+                        observe_window_x.append(estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        observe_window_y.append(estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode))
+                        if observe_window_x[5][-5:] < observe_window_x[4][-5:]:
+                            mi_class_metrics_single_time.append(np.mean(observe_window_x[4][-5:]))
+                            mi_class_metrics_single_time.append(np.mean(observe_window_y[4][-5:]))
+                            mi_class_metrics_single_time.append(25)
+                            class_time_turning_point = 25
+                            print("find the turning point ", mi_class_metrics_single_time)
+                if epochs - t <= 2:
                     print("========== Observe MI(X,T)==============")
-                    mi_x = estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode)
+                    mi_x = estimate_mi(model, 'inputs-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode)
                     print("========== Observe MI(Y,T)==============")
-                    mi_y = estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=300, mode=mode)
+                    mi_y = estimate_mi(model, 'Y-vs-outputs', train_dataloader_label1, EPOCHS=200, mode=mode)
                     conv_window_x.append(np.mean(mi_x[-5:]))
                     conv_window_y.append(np.mean(mi_y[-5:]))
                     if t == epochs -1:
@@ -275,8 +373,8 @@ def train(args, metrics, train_data_beton_path, test_data_beton_path, mode='DV')
                         mi_class_metrics_single_time.append(np.mean(conv_window_y))
                         mi_class_metrics_single_time.append(observe_class)
                         mi_class_metrics.append(mi_class_metrics_single_time)
-
-            torch.save(model, 'models.pth')
+                        print("conv point ", mi_class_metrics_single_time)
+           # torch.save(model, 'models.pth')
             mi_class_metrics.append(metrics)
             print('mi_class_metrics ', mi_class_metrics)
         mi_total_metrics.append(mi_class_metrics)
@@ -373,10 +471,9 @@ def ob_infoNCE(args, train_data_beton_path, test_data_beton_path):
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda')
     parser = argparse.ArgumentParser()
     parser.add_argument('--outputs_dir', type=str, default='results/ob_infoNCE_06_22', help='output_dir')
-    parser.add_argument('--sampling_datasize', type=str, default='4000', help='sampling_datasize')
+    parser.add_argument('--sampling_datasize', type=int, default='4000', help='sampling_datasize')
     parser.add_argument('--training_epochs', type=str, default='100', help='training_epochs')
     parser.add_argument('--batch_size', type=str, default='256', help='batch_size')
     parser.add_argument('--learning_rate', type=str, default='1e-5', help='learning_rate')
@@ -393,9 +490,6 @@ if __name__ == '__main__':
                         help='Path to the training poison data')
     args = parser.parse_args()
     train_data_beton_path, test_data_beton_path = data_loader(args)
+    device = torch.device('cuda')
     # ob_DV()
     ob_infoNCE(args, train_data_beton_path, test_data_beton_path)
-
-
-
-
